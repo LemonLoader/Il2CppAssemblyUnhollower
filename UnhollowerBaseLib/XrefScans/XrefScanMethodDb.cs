@@ -24,7 +24,7 @@ namespace UnhollowerRuntimeLib.XrefScans
             
             foreach (ProcessModule module in Process.GetCurrentProcess().Modules)
             {
-                if (module.ModuleName == "GameAssembly.dll")
+                if (module.ModuleName == "libil2cpp.so")
                 {
                     GameAssemblyBase = (long) module.BaseAddress;
                     break;
