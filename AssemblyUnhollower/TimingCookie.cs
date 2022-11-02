@@ -4,7 +4,7 @@ using UnhollowerBaseLib;
 
 namespace AssemblyUnhollower
 {
-    internal readonly struct TimingCookie : IDisposable
+    public readonly struct TimingCookie : IDisposable
     {
         private readonly Stopwatch myStopwatch;
         public TimingCookie(string message)

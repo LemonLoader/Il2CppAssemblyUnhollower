@@ -15,6 +15,7 @@ using UnhollowerBaseLib.Runtime.VersionSpecific.Assembly;
 using UnhollowerBaseLib.Runtime.VersionSpecific.Class;
 using UnhollowerBaseLib.Runtime.VersionSpecific.Image;
 using UnhollowerRuntimeLib.XrefScans;
+using System.Runtime.InteropServices;
 using Void = Il2CppSystem.Void;
 
 namespace UnhollowerRuntimeLib
@@ -87,10 +88,10 @@ namespace UnhollowerRuntimeLib
                 return UnityVersionHandler.Wrap((Il2CppClass*)classPointer);
             }).ToArray());
         }
-        
+
         public static void RegisterTypeInIl2CppImpl(Type type, bool logSuccess, params INativeClassStruct[] interfaces)
         {
-            if(type == null)
+            if (type == null)
                 throw new ArgumentException($"Type argument cannot be null");
 
             if (type.IsGenericType || type.IsGenericTypeDefinition)
@@ -229,7 +230,8 @@ namespace UnhollowerRuntimeLib
             for (int i = 0; i < baseClassPointer.InterfaceOffsetsCount; i++)
                 classPointer.InterfaceOffsets[i] = baseClassPointer.InterfaceOffsets[i];
             for (int i = baseClassPointer.InterfaceOffsetsCount; i < interfaceOffsetsCount; i++)
-                classPointer.InterfaceOffsets[i] = new Il2CppRuntimeInterfaceOffsetPair {
+                classPointer.InterfaceOffsets[i] = new Il2CppRuntimeInterfaceOffsetPair
+                {
                     interfaceType = interfaces[i - baseClassPointer.InterfaceOffsetsCount].ClassPointer,
                     offset = offsets[i - baseClassPointer.InterfaceOffsetsCount]
                 };
@@ -261,7 +263,7 @@ namespace UnhollowerRuntimeLib
             string namespaze = type.Namespace ?? string.Empty;
             var attribute = Attribute.GetCustomAttribute(type, typeof(UnhollowerBaseLib.Attributes.ClassInjectionAssemblyTargetAttribute)) as UnhollowerBaseLib.Attributes.ClassInjectionAssemblyTargetAttribute;
 
-            foreach (IntPtr image in ((attribute is null) ? IL2CPP.GetIl2CppImages() : attribute.GetImagePointers()) )
+            foreach (IntPtr image in ((attribute is null) ? IL2CPP.GetIl2CppImages() : attribute.GetImagePointers()))
             {
                 ClassFromNameDictionary.Add((namespaze, klass, image), typePointer);
             }
@@ -578,16 +580,16 @@ namespace UnhollowerRuntimeLib
             {
                 if (monoMethod.ReturnType.IsValueType)
                 {
-                    if(monoMethod.ReturnType.IsPrimitive)
-                    { 
-                        if(monoMethod.ReturnType == typeof(float))
+                    if (monoMethod.ReturnType.IsPrimitive)
+                    {
+                        if (monoMethod.ReturnType == typeof(float))
                             body.Emit(OpCodes.Ldc_R4, 0);
                         else if (monoMethod.ReturnType == typeof(double))
                             body.Emit(OpCodes.Ldc_R8, 0);
                         else
                         {
                             body.Emit(OpCodes.Ldc_I4_0);
-                            if(monoMethod.ReturnType == typeof(long) || monoMethod.ReturnType == typeof(ulong))
+                            if (monoMethod.ReturnType == typeof(long) || monoMethod.ReturnType == typeof(ulong))
                             {
                                 body.Emit(OpCodes.Conv_I8);
                             }
@@ -601,7 +603,9 @@ namespace UnhollowerRuntimeLib
                         body.Emit(OpCodes.Initobj, monoMethod.ReturnType);
                         body.Emit(OpCodes.Ldloc_S, local);
                     }
-                } else {
+                }
+                else
+                {
                     body.Emit(OpCodes.Ldc_I4_0);
                     body.Emit(OpCodes.Conv_I);
                 }
@@ -635,7 +639,7 @@ namespace UnhollowerRuntimeLib
         private static void HookGenericMethodGetMethod()
         {
             // keep in mind i have no idea what i'm doing, so this is probably very incorrect
-            var lib = LoadLibrary("libil2cpp.so");
+            var lib = LoadLibrary("il2cpp");
             var getVirtualMethodEntryPoint = GetProcAddress(lib, nameof(IL2CPP.il2cpp_object_get_virtual_method));
             LogSupport.Trace($"il2cpp_object_get_virtual_method entry address: {getVirtualMethodEntryPoint}");
 
@@ -656,7 +660,7 @@ namespace UnhollowerRuntimeLib
             LogSupport.Trace("il2cpp_class_from_il2cpp_type patched");
         }
 
-        private static System.Type SystemTypeFromIl2CppType(Il2CppTypeStruct *typePointer)
+        private static System.Type SystemTypeFromIl2CppType(Il2CppTypeStruct* typePointer)
         {
             var klass = UnityVersionHandler.Wrap(ClassFromTypePatch(typePointer));
             var fullName = Marshal.PtrToStringAnsi(klass.Namespace) + "." + Marshal.PtrToStringAnsi(klass.Name);
@@ -698,7 +702,7 @@ namespace UnhollowerRuntimeLib
 
         private static void HookClassFromType()
         {
-            var lib = LoadLibrary("libil2cpp.so");
+            var lib = LoadLibrary("il2cpp");
             var classFromTypeEntryPoint = GetProcAddress(lib, nameof(IL2CPP.il2cpp_class_from_il2cpp_type));
             LogSupport.Trace($"il2cpp_class_from_il2cpp_type entry address: {classFromTypeEntryPoint}");
 
@@ -745,7 +749,7 @@ namespace UnhollowerRuntimeLib
 
         private static void HookClassFromName()
         {
-            var lib = LoadLibrary("libil2cpp.so");
+            var lib = LoadLibrary("il2cpp");
             var classFromNameEntryPoint = GetProcAddress(lib, nameof(IL2CPP.il2cpp_class_from_name));
             LogSupport.Trace($"il2cpp_class_from_name entry address: {classFromNameEntryPoint}");
 
@@ -767,7 +771,7 @@ namespace UnhollowerRuntimeLib
                 {
                     string namespaze = Marshal.PtrToStringAnsi(param2);
                     string klass = Marshal.PtrToStringAnsi(param3);
-                    ClassFromNameDictionary.TryGetValue((namespaze, klass, param1),out intPtr);
+                    ClassFromNameDictionary.TryGetValue((namespaze, klass, param1), out intPtr);
                 }
 
                 return intPtr;
@@ -800,13 +804,13 @@ namespace UnhollowerRuntimeLib
                 return Marshal.GetDelegateForFunctionPointer<T>(from);
             }
         }
-    }
 
-    public interface IManagedDetour
-    {
-        /// <summary>
-        /// Patch the native function at address specified in `from`, replacing it with `to`, and return a delegate to call the original native function
-        /// </summary>
-        T Detour<T>(IntPtr from, T to) where T : Delegate;
+        public interface IManagedDetour
+        {
+            /// <summary>
+            /// Patch the native function at address specified in `from`, replacing it with `to`, and return a delegate to call the original native function
+            /// </summary>
+            T Detour<T>(IntPtr from, T to) where T : Delegate;
+        }
     }
 }
