@@ -643,21 +643,24 @@ namespace UnhollowerRuntimeLib
             var getVirtualMethodEntryPoint = GetProcAddress(lib, nameof(IL2CPP.il2cpp_object_get_virtual_method));
             LogSupport.Trace($"il2cpp_object_get_virtual_method entry address: {getVirtualMethodEntryPoint}");
 
-            var getVirtualMethodMethod = XrefScannerLowLevel.JumpTargets(getVirtualMethodEntryPoint).Single();
-            LogSupport.Trace($"Xref scan target 1: {getVirtualMethodMethod}");
+            //var getVirtualMethodMethod = XrefScannerLowLevel.JumpTargets(getVirtualMethodEntryPoint).Single();
+            foreach (var getVirtualMethodMethod in XrefScannerLowLevel.JumpTargets(getVirtualMethodEntryPoint))
+            {
+                LogSupport.Trace($"Xref scan target 1: {getVirtualMethodMethod}");
 
-            var targetMethod = XrefScannerLowLevel.JumpTargets(getVirtualMethodMethod).Last();
-            LogSupport.Trace($"Xref scan target 2: {targetMethod}");
+                var targetMethod = XrefScannerLowLevel.JumpTargets(getVirtualMethodMethod).Last();
+                LogSupport.Trace($"Xref scan target 2: {targetMethod}");
 
-            if (targetMethod == IntPtr.Zero)
-                return;
+                if (targetMethod == IntPtr.Zero)
+                    return;
 
-            var targetTargets = XrefScannerLowLevel.JumpTargets(targetMethod).Take(2).ToList();
-            if (targetTargets.Count == 1) // U2021.2.0+, there's additional shim that takes 3 parameters
-                targetMethod = targetTargets[0];
+                var targetTargets = XrefScannerLowLevel.JumpTargets(targetMethod).Take(2).ToList();
+                if (targetTargets.Count == 1) // U2021.2.0+, there's additional shim that takes 3 parameters
+                    targetMethod = targetTargets[0];
 
-            ourOriginalGenericGetMethod = Detour.Detour(targetMethod, new GenericGetMethodDelegate(GenericGetMethodPatch));
-            LogSupport.Trace("il2cpp_class_from_il2cpp_type patched");
+                ourOriginalGenericGetMethod = Detour.Detour(targetMethod, new GenericGetMethodDelegate(GenericGetMethodPatch));
+                LogSupport.Trace("il2cpp_class_from_il2cpp_type patched");
+            }
         }
 
         private static System.Type SystemTypeFromIl2CppType(Il2CppTypeStruct* typePointer)
@@ -706,14 +709,17 @@ namespace UnhollowerRuntimeLib
             var classFromTypeEntryPoint = GetProcAddress(lib, nameof(IL2CPP.il2cpp_class_from_il2cpp_type));
             LogSupport.Trace($"il2cpp_class_from_il2cpp_type entry address: {classFromTypeEntryPoint}");
 
-            var targetMethod = XrefScannerLowLevel.JumpTargets(classFromTypeEntryPoint).Single();
-            LogSupport.Trace($"Xref scan target: {targetMethod}");
+            //var targetMethod = XrefScannerLowLevel.JumpTargets(classFromTypeEntryPoint).Single();
+            foreach (var targetMethod in XrefScannerLowLevel.JumpTargets(classFromTypeEntryPoint))
+            {
+                LogSupport.Trace($"Xref scan target: {targetMethod}");
 
-            if (targetMethod == IntPtr.Zero)
-                return;
+                if (targetMethod == IntPtr.Zero)
+                    return;
 
-            ourOriginalTypeToClassMethod = Detour.Detour(targetMethod, new TypeToClassDelegate(ClassFromTypePatch));
-            LogSupport.Trace("il2cpp_class_from_il2cpp_type patched");
+                ourOriginalTypeToClassMethod = Detour.Detour(targetMethod, new TypeToClassDelegate(ClassFromTypePatch));
+                LogSupport.Trace("il2cpp_class_from_il2cpp_type patched");
+            }
         }
 
 
