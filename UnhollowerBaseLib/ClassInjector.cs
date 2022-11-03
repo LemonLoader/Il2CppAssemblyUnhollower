@@ -804,13 +804,13 @@ namespace UnhollowerRuntimeLib
                 return Marshal.GetDelegateForFunctionPointer<T>(from);
             }
         }
+    }
 
-        public interface IManagedDetour
-        {
-            /// <summary>
-            /// Patch the native function at address specified in `from`, replacing it with `to`, and return a delegate to call the original native function
-            /// </summary>
-            T Detour<T>(IntPtr from, T to) where T : Delegate;
-        }
+    public interface IManagedDetour
+    {
+        /// <summary>
+        /// Patch the native function at address specified in `from`, replacing it with `to`, and return a delegate to call the original native function
+        /// </summary>
+        T Detour<T>(IntPtr from, T to) where T : Delegate;
     }
 }
