@@ -4,6 +4,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.IO.MemoryMappedFiles;
 using System.Linq;
+using System.Runtime.CompilerServices;
 using System.Text;
 using AssemblyUnhollower.Contexts;
 using AssemblyUnhollower.Extensions;
@@ -30,13 +31,8 @@ namespace AssemblyUnhollower.Passes
 
             IntPtr gameAssemblyPtr;
 
-            unsafe
-            {
-                byte* fileStartPtr = null;
-                accessor.SafeMemoryMappedViewHandle.AcquirePointer(ref fileStartPtr);
-                gameAssemblyPtr = (IntPtr) fileStartPtr;
-            }
-            
+            gameAssemblyPtr = CSHelper.GetAsmLoc();
+
             context.HasGcWbarrierFieldWrite = FindByteSequence(gameAssemblyPtr, accessor.Capacity, nameof(IL2CPP.il2cpp_gc_wbarrier_set_field));
             
             if (!Pass15GenerateMemberContexts.HasObfuscatedMethods) return;
@@ -47,36 +43,42 @@ namespace AssemblyUnhollower.Passes
             context.MethodStartAddresses.Sort();
 
             // Scan xrefs
-            context.Assemblies.SelectMany(it => it.Types).SelectMany(it => it.Methods).AsParallel().ForAll(
-                originalTypeMethod =>
+            var methods = context.Assemblies.SelectMany(it => it.Types).SelectMany(it => it.Methods);
+            LogSupport.Error($"Scanning {methods.Count()} methods");
+            int i = 0;
+            foreach (var originalTypeMethod in methods)
+            {
+                var address = originalTypeMethod.FileOffset;
+                if (address == 0) continue;
+
+                if (!options.NoXrefCache)
                 {
-                    var address = originalTypeMethod.FileOffset;
-                    if (address == 0) return;
+                    var pair = XrefScanMetadataGenerationUtil.FindMetadataInitForMethod(originalTypeMethod, (long)gameAssemblyPtr);
+                    originalTypeMethod.MetadataInitFlagRva = pair.FlagRva;
+                    originalTypeMethod.MetadataInitTokenRva = pair.TokenRva;
+                }
+
+                var nextMethodStart = context.MethodStartAddresses.BinarySearch(address + 1);
+                if (nextMethodStart < 0) nextMethodStart = ~nextMethodStart;
+                var length = nextMethodStart >= context.MethodStartAddresses.Count ? 1024 * 1024 : (context.MethodStartAddresses[nextMethodStart] - address);
+                foreach (var callTargetGlobal in XrefScanner.XrefScanImpl(XrefScanner.DecoderForAddress(IntPtr.Add(gameAssemblyPtr, (int)address), (int)length), true))
+                {
+                    var callTarget = callTargetGlobal.RelativeToBase((long)gameAssemblyPtr + originalTypeMethod.FileOffset - originalTypeMethod.Rva);
+                    if (callTarget.Type == XrefType.Method)
+                    {
+                        var targetRelative = (long)callTarget.Pointer;
+                        methodToCallersMap.GetOrAdd(targetRelative, _ => new List<XrefInstance>()).AddLocked(new XrefInstance(XrefType.Method, (IntPtr)originalTypeMethod.Rva, callTarget.FoundAt));
+                        methodToCalleesMap.GetOrAdd(originalTypeMethod.Rva, _ => new List<long>()).AddLocked(targetRelative);
+                    }
 
                     if (!options.NoXrefCache)
-                    {
-                        var pair = XrefScanMetadataGenerationUtil.FindMetadataInitForMethod(originalTypeMethod, (long) gameAssemblyPtr);
-                        originalTypeMethod.MetadataInitFlagRva = pair.FlagRva;
-                        originalTypeMethod.MetadataInitTokenRva = pair.TokenRva;
-                    }
+                        originalTypeMethod.XrefScanResults.Add(callTarget);
+                }
 
-                    var nextMethodStart = context.MethodStartAddresses.BinarySearch(address + 1);
-                    if (nextMethodStart < 0) nextMethodStart = ~nextMethodStart;
-                    var length = nextMethodStart >= context.MethodStartAddresses.Count ? 1024 * 1024 : (context.MethodStartAddresses[nextMethodStart] - address);
-                    foreach (var callTargetGlobal in XrefScanner.XrefScanImpl(XrefScanner.DecoderForAddress(IntPtr.Add(gameAssemblyPtr, (int) address), (int) length), true))
-                    {
-                        var callTarget = callTargetGlobal.RelativeToBase((long) gameAssemblyPtr + originalTypeMethod.FileOffset - originalTypeMethod.Rva);
-                        if (callTarget.Type == XrefType.Method)
-                        {
-                            var targetRelative = (long) callTarget.Pointer;
-                            methodToCallersMap.GetOrAdd(targetRelative, _ => new List<XrefInstance>()).AddLocked(new XrefInstance(XrefType.Method, (IntPtr) originalTypeMethod.Rva, callTarget.FoundAt));
-                            methodToCalleesMap.GetOrAdd(originalTypeMethod.Rva, _ => new List<long>()).AddLocked(targetRelative);
-                        }
-
-                        if (!options.NoXrefCache)
-                            originalTypeMethod.XrefScanResults.Add(callTarget);
-                    }
-                });
+                if (i % 100 == 0)
+                    LogSupport.Error($"Scanned {i + 1}/{methods.Count().ToString()} methods");
+                i++;
+            }
 
             MapOfCallers = methodToCallersMap;
 

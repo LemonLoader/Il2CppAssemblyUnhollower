@@ -14,6 +14,7 @@ using UnhollowerRuntimeLib.XrefScans;
 [assembly:TypeForwardedTo(typeof(XrefScanMethodDb))]
 [assembly:TypeForwardedTo(typeof(XrefScannerLowLevel))]
 [assembly:TypeForwardedTo(typeof(XrefType))]
+[assembly:TypeForwardedTo(typeof(CSHelper))]
 
 namespace UnhollowerRuntimeLib
 {
