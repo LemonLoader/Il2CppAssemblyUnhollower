@@ -76,7 +76,7 @@ namespace AssemblyUnhollower.Passes
                 }
 
                 if (i % 100 == 0)
-                    LogSupport.Info($"Scanned {i + 1}/{methods.Count().ToString()} methods");
+                    LogSupport.Info($"Scanned {i + 1}/{methods.Count()} methods");
                 i++;
             }
 
