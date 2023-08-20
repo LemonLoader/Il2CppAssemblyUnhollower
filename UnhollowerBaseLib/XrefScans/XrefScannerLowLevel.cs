@@ -1,43 +1,62 @@
 using System;
 using System.Collections.Generic;
-using System.Runtime.CompilerServices;
 using System.IO;
-using UnhollowerBaseLib;
-using Decoder = UnhollowerRuntimeLib.XrefScans.XrefScanner.DecoderSettings;
+using Disarm;
+using Disarm.InternalDisassembly;
+using Iced.Intel;
 
 namespace UnhollowerRuntimeLib.XrefScans
 {
     public static class XrefScannerLowLevel
     {
-
-        public static IEnumerable<IntPtr> JumpTargets(IntPtr codeStart)
+        public unsafe static IEnumerable<IntPtr> JumpTargets(IntPtr codeStart)
         {
-            //LogSupport.Info("JumpTargets");
+            return JumpTargetsImpl(Disassembler.Disassemble((byte*)codeStart, 1000, (ulong)codeStart.ToInt64(), new Disassembler.Options() { ContinueOnError = true, ThrowOnUnimplemented = false }));
+        }
 
-            //UnhollowerBaseLib.LogSupport.Info(System.Environment.StackTrace);
-
-            var decoder = XrefScanner.DecoderForAddress(codeStart);
-            //LogSupport.Info(decoder.limit.ToString());
-
-            while (true)
+        private static IEnumerable<IntPtr> JumpTargetsImpl(IEnumerable<Arm64Instruction> instructions)
+        {
+            foreach (var instruction in instructions)
             {
-                //LogSupport.Info("request");
-                IntPtr res = JumpTargetsImpl_Native(ref decoder);
-                //LogSupport.Info(string.Format("0x{0:X8}", res));
-                if (res == IntPtr.Zero)
+                if (IsUnconditionalBranch(instruction))
                 {
-                    yield return res;
-                    break;
+                    yield return (IntPtr)instruction.BranchTarget;
+                    if (instruction.Mnemonic == Arm64Mnemonic.B)
+                        yield break;
                 }
-                yield return res;
-            };
+            }
         }
 
-        [MethodImpl(MethodImplOptions.InternalCall)]
-        private extern static IntPtr JumpTargetsImpl_Native(ref Decoder codeStart);
-
-        public static IEnumerable<IntPtr> CallAndIndirectTargets(IntPtr pointer) {
-            throw new NotImplementedException("When porting this, I have no idea what this does.");
+        public unsafe static IEnumerable<IntPtr> CallAndIndirectTargets(IntPtr pointer)
+        {
+            return CallAndIndirectTargetsImpl(Disassembler.Disassemble((byte*)pointer, 1024*1024, (ulong)pointer.ToInt64(), new Disassembler.Options() { ContinueOnError = true, ThrowOnUnimplemented = false }));
         }
+
+        private static IEnumerable<IntPtr> CallAndIndirectTargetsImpl(IEnumerable<Arm64Instruction> instructions)
+        {
+            foreach (var instruction in instructions)
+            {
+                if (IsCallOrJump(instruction))
+                {
+                    if (instruction.Op0Kind == Arm64OperandKind.ImmediatePcRelative)
+                    {
+                        yield return (IntPtr)(instruction.Op0Imm + (long)instruction.Address);
+                        continue;
+                    }
+                }
+            }
+        }
+
+        private static bool IsUnconditionalBranch(Arm64Instruction instruction)
+        {
+            return instruction.Mnemonic == Arm64Mnemonic.B;
+        }
+
+        private static bool IsCallOrJump(Arm64Instruction instruction)
+        {
+            return instruction.Mnemonic == Arm64Mnemonic.BL;
+        }
+
+        public static byte[] ASMBYTES = null;
     }
 }

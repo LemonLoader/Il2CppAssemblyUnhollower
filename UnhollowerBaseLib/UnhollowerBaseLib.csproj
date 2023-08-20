@@ -23,6 +23,7 @@
     </ItemGroup>
 
     <ItemGroup>
+        <PackageReference Include="Disarm" Version="2022.1.0-master.34" />
         <PackageReference Include="Iced" Version="1.10.0" />
         <PackageReference Include="IsExternalInit" Version="1.0.0">
           <PrivateAssets>all</PrivateAssets>
